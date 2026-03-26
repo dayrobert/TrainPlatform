@@ -10,52 +10,106 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Query(sort: \SavedStop.timestamp, order: .reverse) private var savedStops: [SavedStop]
+
+    @State private var showingAddSheet = false
+    @State private var selectedStop: SavedStop?
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Top half: saved platforms list
+                List(selection: $selectedStop) {
+                    if savedStops.isEmpty {
+                        ContentUnavailableView(
+                            "No Saved Platforms",
+                            systemImage: "tram",
+                            description: Text("Tap + to add a platform.")
+                        )
+                    } else {
+                        ForEach(savedStops) { stop in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(stop.stopName)
+                                    .font(.headline)
+                                Text("\(stop.service) • \(stop.routeName)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .listRowBackground(
+                                selectedStop?.persistentModelID == stop.persistentModelID
+                                    ? Color.accentColor.opacity(0.15)
+                                    : Color.clear
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedStop = stop
+                            }
+                        }
+                        .onDelete(perform: deleteStops)
                     }
                 }
-                .onDelete(perform: deleteItems)
+                .listStyle(.plain)
+                .frame(maxHeight: .infinity)
+
+                Divider()
+
+                // Bottom half: status messages
+                if let stop = selectedStop {
+                    PlatformStatusView(stop: stop)
+                        .frame(maxHeight: .infinity)
+                        .id(stop.persistentModelID)
+                } else {
+                    VStack {
+                        Spacer()
+                        Text("Select a platform to view status")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+                }
             }
+            .navigationTitle("My Platforms")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingAddSheet = true
+                    } label: {
+                        Image(systemName: "plus")
                     }
                 }
             }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            .sheet(isPresented: $showingAddSheet) {
+                StopSelectorView()
             }
+            .onChange(of: savedStops) { _, newValue in
+                // If the selected stop was deleted, clear selection
+                if let selected = selectedStop,
+                   !newValue.contains(where: { $0.persistentModelID == selected.persistentModelID }) {
+                    selectedStop = nil
+                }
+                // Auto-select first stop if none selected
+                if selectedStop == nil, let first = newValue.first {
+                    selectedStop = first
+                }
+            }
+            .onAppear {
+                if selectedStop == nil, let first = savedStops.first {
+                    selectedStop = first
+                }
+            }
+        }
+    }
+
+    private func deleteStops(at offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(savedStops[index])
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .modelContainer(for: SavedStop.self, inMemory: true)
 }

@@ -7,26 +7,54 @@
 
 import SwiftUI
 import SwiftData
+import CarPlay
 
-@main
-struct TrainPlatformApp: App {
-    var sharedModelContainer: ModelContainer = {
+// Shared ModelContainer accessible from both SwiftUI and CarPlay scenes
+enum SharedModelContainer {
+    static let container: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            SavedStop.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
+}
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        if connectingSceneSession.role == UISceneSession.Role.carTemplateApplication {
+            let config = UISceneConfiguration(
+                name: "CarPlay",
+                sessionRole: connectingSceneSession.role
+            )
+            config.delegateClass = CarPlaySceneDelegate.self
+            return config
+        }
+
+        let config = UISceneConfiguration(
+            name: "Default",
+            sessionRole: connectingSceneSession.role
+        )
+        return config
+    }
+}
+
+@main
+struct TrainPlatformApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(SharedModelContainer.container)
     }
 }
