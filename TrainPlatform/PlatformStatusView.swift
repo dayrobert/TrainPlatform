@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+struct AlertHeaderWrapper: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
 struct PlatformStatusView: View {
     let stop: SavedStop
 
@@ -19,6 +24,7 @@ struct PlatformStatusView: View {
     @State private var alertRefreshTimer: Timer?
     @State private var displayRefreshTimer: Timer?
     @State private var now = Date()
+    @State private var selectedAlertHeader: AlertHeaderWrapper? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,17 +39,22 @@ struct PlatformStatusView: View {
 
             // Alert banner if present
             ForEach(alertHeaders, id: \.self) { header in
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.caption)
-                    Text(header)
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                        .lineLimit(2)
+                Button {
+                    selectedAlertHeader = AlertHeaderWrapper(text: header)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption)
+                        Text(header)
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
             }
 
             if isLoading && predictions.isEmpty {
@@ -88,6 +99,9 @@ struct PlatformStatusView: View {
         }
         .onDisappear {
             stopAll()
+        }
+        .alert(item: $selectedAlertHeader) { alert in
+            Alert(title: Text("Alert"), message: Text(alert.text), dismissButton: .default(Text("OK")))
         }
     }
 

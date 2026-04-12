@@ -19,14 +19,14 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Top half: saved platforms list
-                List(selection: $selectedStop) {
-                    if savedStops.isEmpty {
-                        ContentUnavailableView(
-                            "No Saved Platforms",
-                            systemImage: "tram",
-                            description: Text("Tap + to add a platform.")
-                        )
-                    } else {
+                if savedStops.isEmpty {
+                    ContentUnavailableView(
+                        "No Saved Platforms",
+                        systemImage: "tram",
+                        description: Text("Tap + to add a platform.")
+                    )
+                } else {
+                    Picker("Platform", selection: $selectedStop) {
                         ForEach(savedStops) { stop in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(stop.stopName)
@@ -35,21 +35,12 @@ struct ContentView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            .listRowBackground(
-                                selectedStop?.persistentModelID == stop.persistentModelID
-                                    ? Color.accentColor.opacity(0.15)
-                                    : Color.clear
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedStop = stop
-                            }
+                            .tag(Optional(stop))
                         }
-                        .onDelete(perform: deleteStops)
                     }
+                    .pickerStyle(.menu)
+                    .padding()
                 }
-                .listStyle(.plain)
-                .frame(maxHeight: .infinity)
 
                 Divider()
 
@@ -58,6 +49,7 @@ struct ContentView: View {
                     PlatformStatusView(stop: stop)
                         .frame(maxHeight: .infinity)
                         .id(stop.persistentModelID)
+                        .padding()
                 } else {
                     VStack {
                         Spacer()
@@ -77,6 +69,18 @@ struct ContentView: View {
                         showingAddSheet = true
                     } label: {
                         Image(systemName: "plus")
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if let stop = selectedStop, savedStops.count > 0 {
+                        Button(role: .destructive) {
+                            if let idx = savedStops.firstIndex(where: { $0.persistentModelID == stop.persistentModelID }) {
+                                deleteStops(at: IndexSet(integer: idx))
+                            }
+                        } label: {
+                            Label("Delete Platform", systemImage: "trash")
+                        }
+                        .disabled(savedStops.isEmpty)
                     }
                 }
             }
