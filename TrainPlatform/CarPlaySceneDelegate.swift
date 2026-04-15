@@ -1,3 +1,4 @@
+#if false
 //
 //  CarPlaySceneDelegate.swift
 //  TrainPlatform
@@ -240,3 +241,4 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 }
+#endif

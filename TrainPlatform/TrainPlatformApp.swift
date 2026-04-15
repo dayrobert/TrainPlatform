@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import CarPlay
 
 // Shared ModelContainer accessible from both SwiftUI and CarPlay scenes
 enum SharedModelContainer {
@@ -30,20 +29,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        if connectingSceneSession.role == UISceneSession.Role.carTemplateApplication {
-            let config = UISceneConfiguration(
-                name: "CarPlay",
-                sessionRole: connectingSceneSession.role
-            )
-            config.delegateClass = CarPlaySceneDelegate.self
+        if true {
+            let config = UISceneConfiguration(name: "Default", sessionRole: connectingSceneSession.role)
             return config
         }
-
-        let config = UISceneConfiguration(
-            name: "Default",
-            sessionRole: connectingSceneSession.role
-        )
-        return config
     }
 }
 
