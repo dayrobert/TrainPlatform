@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Foundation
 
 struct AlertHeaderWrapper: Identifiable {
     let id = UUID()
@@ -16,6 +17,7 @@ struct PlatformStatusView: View {
     let stop: SavedStop
 
     @State private var predictions: [MBTAPrediction] = []
+    @State private var schedules: [MBTAScheduleRow] = []
     @State private var tripInfos: [String: MBTATripInfo] = [:]
     @State private var routeInfos: [String: MBTARouteInfo] = [:]
     @State private var alertHeaders: [String] = []
@@ -25,6 +27,7 @@ struct PlatformStatusView: View {
     @State private var displayRefreshTimer: Timer?
     @State private var now = Date()
     @State private var selectedAlertHeader: AlertHeaderWrapper? = nil
+    @State private var timeFormatter = DateFormatter()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -66,23 +69,60 @@ struct PlatformStatusView: View {
                     Spacer()
                 }
                 Spacer()
-            } else if predictions.isEmpty {
-                Spacer()
-                Text("No upcoming departures")
-                    .font(.subheadline)
-                    .foregroundStyle(.gray)
-                    .frame(maxWidth: .infinity)
-                Spacer()
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(predictions) { prediction in
-                            DepartureRow(
-                                prediction: prediction,
-                                tripInfo: tripInfos[prediction.tripId ?? ""],
-                                routeInfo: routeForPrediction(prediction),
-                                now: now
-                            )
+                        // Arrivals (Predictions)
+                        if !predictions.isEmpty {
+                            ForEach(predictions) { prediction in
+                                DepartureRow(
+                                    prediction: prediction,
+                                    tripInfo: tripInfos[prediction.tripId ?? ""],
+                                    routeInfo: routeForPrediction(prediction),
+                                    now: now
+                                )
+                            }
+                        } else if !isLoading {
+                            // Empty state for predictions
+                            VStack {
+                                Text("No upcoming departures")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.gray)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                            }
+                        }
+
+                        // Yellow divider only if both sections have content
+                        if stop.service.localizedCaseInsensitiveContains("commuter") && !schedules.isEmpty && !predictions.isEmpty {
+                            Rectangle()
+                                .fill(Color.yellow)
+                                .frame(height: 2)
+                                .padding(.vertical, 8)
+                        }
+
+                        // Scheduled arrivals section (Commuter Rail only)
+                        if stop.service.localizedCaseInsensitiveContains("commuter") && !schedules.isEmpty {
+                            let predictedTripIDs: Set<String> = Set(predictions.compactMap { $0.tripId })
+                            let displaySchedules = schedules.filter { row in
+                                guard let t = row.tripId else { return true }
+                                return !predictedTripIDs.contains(t)
+                            }
+
+                            HStack {
+                                Text("Today's Schedule")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.yellow)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 4)
+
+                            VStack(spacing: 0) {
+                                ForEach(displaySchedules) { row in
+                                    ScheduleRowView(row: row, formatter: timeFormatter)
+                                }
+                            }
                         }
                     }
                     .padding(.top, 4)
@@ -96,6 +136,7 @@ struct PlatformStatusView: View {
             fetchAlerts()
             startAlertTimer()
             startDisplayTimer()
+            loadSchedulesIfNeeded()
         }
         .onDisappear {
             stopAll()
@@ -230,6 +271,79 @@ struct PlatformStatusView: View {
                 alertHeaders = decoded.data.compactMap { $0.attributes.header }
             }
         }.resume()
+    }
+}
+
+// MARK: - Schedules
+
+private extension PlatformStatusView {
+    func loadSchedulesIfNeeded() {
+        guard stop.service.localizedCaseInsensitiveContains("commuter") else { return }
+
+        // Per-stop daily cache key
+        let cacheKey = "scheduleLastFetch_\(stop.stopId)_\(stop.routeId)"
+
+        // Check if we've fetched today
+        let calendar = Calendar(identifier: .gregorian)
+        if let last = UserDefaults.standard.object(forKey: cacheKey) as? Date,
+           calendar.isDate(last, inSameDayAs: Date()) {
+            // Already fetched today; do nothing
+            return
+        }
+
+        // Configure time formatter once
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .short
+
+        Task { @MainActor in
+            do {
+                let rows = try await MBTAScheduleService.fetchSchedulesForToday(
+                    apiKey: mbtaAPIKey,
+                    stopId: stop.stopId,
+                    routeId: stop.routeId
+                )
+                self.schedules = rows
+                if !rows.isEmpty {
+                    // Record the fetch time for today only when we have data
+                    UserDefaults.standard.set(Date(), forKey: cacheKey)
+                }
+            } catch {
+                print("Schedules fetch failed:", error)
+            }
+        }
+    }
+}
+
+struct ScheduleRowView: View {
+    let row: MBTAScheduleRow
+    let formatter: DateFormatter
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Destination
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.headsign)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            Spacer()
+            // Time and optional track
+            Text(detailText)
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var detailText: String {
+        let timeText = formatter.string(from: row.time)
+        if let platform = row.platform, !platform.isEmpty {
+            return "\(timeText) • Track \(platform)"
+        } else {
+            return timeText
+        }
     }
 }
 

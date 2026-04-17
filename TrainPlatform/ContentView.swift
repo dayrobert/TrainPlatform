@@ -27,6 +27,10 @@ struct ContentView: View {
                     )
                 } else {
                     Picker("Platform", selection: $selectedStop) {
+                        Text("Select a platform")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .tag(nil as SavedStop?)
                         ForEach(savedStops) { stop in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(stop.stopName)
@@ -44,22 +48,24 @@ struct ContentView: View {
 
                 Divider()
 
-                // Bottom half: status messages
-                if let stop = selectedStop {
-                    PlatformStatusView(stop: stop)
+                // Bottom half: status messages (hide entirely when no saved platforms)
+                if !savedStops.isEmpty {
+                    if let stop = selectedStop {
+                        PlatformStatusView(stop: stop)
+                            .frame(maxHeight: .infinity)
+                            .id(stop.persistentModelID)
+                            .padding()
+                    } else {
+                        VStack {
+                            Spacer()
+                            Text("Select a platform to view status")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
                         .frame(maxHeight: .infinity)
-                        .id(stop.persistentModelID)
-                        .padding()
-                } else {
-                    VStack {
-                        Spacer()
-                        Text("Select a platform to view status")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                        .background(Color(.systemGroupedBackground))
                     }
-                    .frame(maxHeight: .infinity)
-                    .background(Color(.systemGroupedBackground))
                 }
             }
             .navigationTitle("My Platforms")
@@ -117,3 +123,4 @@ struct ContentView: View {
     ContentView()
         .modelContainer(for: SavedStop.self, inMemory: true)
 }
+
