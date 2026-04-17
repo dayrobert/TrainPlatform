@@ -103,11 +103,11 @@ struct PlatformStatusView: View {
 
                         // Scheduled arrivals section (Commuter Rail only)
                         if stop.service.localizedCaseInsensitiveContains("commuter") && !schedules.isEmpty {
-                            let predictedTripIDs: Set<String> = Set(predictions.compactMap { $0.tripId })
-                            let displaySchedules = schedules.filter { row in
-                                guard let t = row.tripId else { return true }
-                                return !predictedTripIDs.contains(t)
-                            }
+                            // let predictedTripIDs: Set<String> = Set(predictions.compactMap { $0.tripId })
+                            // let displaySchedules = schedules.filter { row in
+                            //     guard let t = row.tripId else { return true }
+                            //     return !predictedTripIDs.contains(t)
+                            // }
 
                             HStack {
                                 Text("Today's Schedule")
@@ -119,7 +119,8 @@ struct PlatformStatusView: View {
                             .padding(.bottom, 4)
 
                             VStack(spacing: 0) {
-                                ForEach(displaySchedules) { row in
+                                // ForEach(displaySchedules) { row in
+                                ForEach(schedules) { row in
                                     ScheduleRowView(row: row, formatter: timeFormatter)
                                 }
                             }
@@ -279,21 +280,28 @@ struct PlatformStatusView: View {
 private extension PlatformStatusView {
     func loadSchedulesIfNeeded() {
         guard stop.service.localizedCaseInsensitiveContains("commuter") else { return }
+        
+        print("[Schedules] loadSchedulesIfNeeded for service=", stop.service, "stopId=", stop.stopId, "routeId=", stop.routeId)
 
-        // Per-stop daily cache key
+        // Cache is keyed per stop/route and stores the last fetch date; it is considered valid only for the current day.
         let cacheKey = "scheduleLastFetch_\(stop.stopId)_\(stop.routeId)"
+        
+        print("[Schedules] cacheKey:", cacheKey)
 
-        // Check if we've fetched today
+        // Check if we've fetched today and have schedules loaded
         let calendar = Calendar(identifier: .gregorian)
         if let last = UserDefaults.standard.object(forKey: cacheKey) as? Date,
-           calendar.isDate(last, inSameDayAs: Date()) {
-            // Already fetched today; do nothing
+           calendar.isDate(last, inSameDayAs: Date()),
+           !self.schedules.isEmpty {
+            print("[Schedules] Using cached schedules for today; last fetch:", last)
             return
         }
 
         // Configure time formatter once
         timeFormatter.dateStyle = .none
         timeFormatter.timeStyle = .short
+        
+        print("[Schedules] Fetching schedules now…")
 
         Task { @MainActor in
             do {
@@ -303,12 +311,14 @@ private extension PlatformStatusView {
                     routeId: stop.routeId
                 )
                 self.schedules = rows
-                if !rows.isEmpty {
-                    // Record the fetch time for today only when we have data
-                    UserDefaults.standard.set(Date(), forKey: cacheKey)
+                print("[Schedules] fetched rows:", rows.count)
+                if let first = rows.first {
+                    print("[Schedules] first row sample:", first.headsign, first.time)
                 }
+                // Record that we've fetched for today (cache is per-day and per stop/route)
+                UserDefaults.standard.set(Date(), forKey: cacheKey)
             } catch {
-                print("Schedules fetch failed:", error)
+                print("[Schedules] fetch failed:", error)
             }
         }
     }
@@ -430,3 +440,4 @@ struct RouteBadge: View {
             .clipShape(Circle())
     }
 }
+

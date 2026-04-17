@@ -104,6 +104,12 @@ struct ContentView: View {
                     selectedStop = first
                 }
             }
+            .onChange(of: selectedStop) { _, newValue in
+                // Prevent selecting the disabled placeholder when platforms exist
+                if newValue == nil, let first = savedStops.first {
+                    selectedStop = first
+                }
+            }
             .onAppear {
                 if selectedStop == nil, let first = savedStops.first {
                     selectedStop = first

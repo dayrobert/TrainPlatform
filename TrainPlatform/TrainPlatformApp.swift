@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 // Shared ModelContainer accessible from both SwiftUI and CarPlay scenes
 enum SharedModelContainer {
@@ -39,11 +40,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct TrainPlatformApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
         .modelContainer(SharedModelContainer.container)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // Prefetch schedules for all commuter rail stops once per day
+                SchedulesPreloader.shared.prefetchIfNeeded(modelContainer: SharedModelContainer.container)
+            }
+        }
     }
 }
