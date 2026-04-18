@@ -195,13 +195,12 @@ final class MBTAEventSource: NSObject, URLSessionDataDelegate {
         disconnect()
 
         var components = URLComponents(string: "https://api-v3.mbta.com/predictions")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stopId),
             URLQueryItem(name: "filter[route]", value: routeId),
             URLQueryItem(name: "sort", value: "arrival_time"),
             URLQueryItem(name: "page[limit]", value: "10")
-        ]
+        ])
         guard let url = components.url else { return }
 
         var request = URLRequest(url: url)
@@ -230,6 +229,18 @@ final class MBTAEventSource: NSObject, URLSessionDataDelegate {
         guard let text = String(data: data, encoding: .utf8) else { return }
         buffer += text
         processBuffer()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        if let http = response as? HTTPURLResponse {
+            logRateLimitHeaders(for: http, endpoint: "/predictions (SSE)")
+        }
+        completionHandler(.allow)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -284,5 +295,12 @@ final class MBTAEventSource: NSObject, URLSessionDataDelegate {
         default:
             break
         }
+    }
+
+    private func logRateLimitHeaders(for response: HTTPURLResponse, endpoint: String) {
+        let limit = response.value(forHTTPHeaderField: "x-ratelimit-limit") ?? "n/a"
+        let remaining = response.value(forHTTPHeaderField: "x-ratelimit-remaining") ?? "n/a"
+        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset") ?? "n/a"
+        print("[MBTA][RateLimit] \(endpoint) status=\(response.statusCode) limit=\(limit) remaining=\(remaining) reset=\(reset)")
     }
 }

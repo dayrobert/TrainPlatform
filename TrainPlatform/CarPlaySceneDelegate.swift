@@ -121,14 +121,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         guard let stop = currentStop else { return }
 
         var components = URLComponents(string: "https://api-v3.mbta.com/predictions")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stop.stopId),
             URLQueryItem(name: "filter[route]", value: stop.routeId),
             URLQueryItem(name: "include", value: "trip,route"),
             URLQueryItem(name: "sort", value: "arrival_time"),
             URLQueryItem(name: "page[limit]", value: "10")
-        ]
+        ])
         guard let url = components.url else { return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
 
@@ -173,12 +172,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     private func fetchAlerts(for stop: SavedStop, completion: @escaping ([CPListItem]) -> Void) {
         var components = URLComponents(string: "https://api-v3.mbta.com/alerts")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stop.stopId),
             URLQueryItem(name: "filter[route]", value: stop.routeId),
             URLQueryItem(name: "sort", value: "-severity")
-        ]
+        ])
         guard let url = components.url else { completion([]); return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
 

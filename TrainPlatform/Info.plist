@@ -4,5 +4,7 @@
 <dict>
     <key>CFBundleIconName</key>
     <string>AppIcon</string>
+    <key>MBTA_API_KEY</key>
+    <string>$(MBTA_API_KEY)</string>
 </dict>
 </plist>

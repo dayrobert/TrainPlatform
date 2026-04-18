@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftData
 
-let mbtaAPIKey = "eaf3d56ea97e416d89eacdaf7284a86b"
 
 enum MBTAService: String, CaseIterable, Identifiable {
     case commuterRail = "Commuter Rail"
@@ -214,10 +213,9 @@ struct StopSelectorView: View {
         routeOptions = []
         var components = URLComponents(string: "https://api-v3.mbta.com/routes")!
         let typesValue = routeTypes.map(String.init).joined(separator: ",")
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        var queryItems: [URLQueryItem] = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[type]", value: typesValue)
-        ]
+        ])
         if routeTypes == [3] {
             queryItems.append(URLQueryItem(name: "filter[active]", value: "true"))
         }
@@ -260,10 +258,9 @@ struct StopSelectorView: View {
         routeOptions = []
         routeLoadError = nil
         var components = URLComponents(string: "https://api-v3.mbta.com/routes")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[type]", value: "0,1")
-        ]
+        ])
         guard let url = components.url else {
             isLoadingRoutes = false
             routeLoadError = "Failed to build request."
@@ -307,7 +304,7 @@ struct StopSelectorView: View {
 
     private func fetchRouteDirectionNames(routeId: String, completion: @escaping ([Int: String]) -> Void) {
         var components = URLComponents(string: "https://api-v3.mbta.com/routes/\(routeId)")!
-        components.queryItems = [URLQueryItem(name: "api_key", value: mbtaAPIKey)]
+        components.queryItems = mbtaAPIQueryItems([])
         guard let url = components.url else { completion([:]); return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -316,11 +313,11 @@ struct StopSelectorView: View {
                 do {
                     struct RouteDetailResponse: Decodable {
                         struct DataObj: Decodable { let id: String; let attributes: Attrs }
-                        struct Attrs: Decodable { let direction_names: [String]? }
+                        struct Attrs: Decodable { let direction_destinations: [String]? }
                         let data: DataObj
                     }
                     let decoded = try JSONDecoder().decode(RouteDetailResponse.self, from: data)
-                    let names = decoded.data.attributes.direction_names ?? []
+                    let names = decoded.data.attributes.direction_destinations ?? []
                     var map: [Int: String] = [:]
                     for (idx, name) in names.enumerated() { map[idx] = name }
                     completion(map)
@@ -331,11 +328,10 @@ struct StopSelectorView: View {
 
     private func fetchSilverLineRoutes(completion: @escaping ([RouteOption]) -> Void) {
         var components = URLComponents(string: "https://api-v3.mbta.com/routes")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[type]", value: "3"),
             URLQueryItem(name: "filter[active]", value: "true")
-        ]
+        ])
         guard let url = components.url else {
             completion([])
             return
@@ -386,6 +382,10 @@ struct StopSelectorView: View {
         let included: [IncludedData]?
     }
 
+    private func isZoneStopId(_ stopId: String) -> Bool {
+        stopId.hasPrefix("CR-zone-") || stopId.hasPrefix("zone-")
+    }
+
     private func loadStops(for route: RouteOption?) {
         stopLoadError = nil
         stopOptions = []
@@ -431,12 +431,11 @@ struct StopSelectorView: View {
 
     private func fetchSchedulesWithStops(for routeId: String, completion: @escaping ([StopOption], [String: (sequence: Int, direction: Int)], Set<Int>) -> Void) {
         var components = URLComponents(string: "https://api-v3.mbta.com/schedules")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[route]", value: routeId),
             URLQueryItem(name: "include", value: "stop"),
             URLQueryItem(name: "page[limit]", value: "2000")
-        ]
+        ])
         guard let url = components.url else { completion([], [:], []); return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -450,6 +449,7 @@ struct StopSelectorView: View {
                     let decoded = try JSONDecoder().decode(MBTASchedulesWithStopsResponse.self, from: data)
                     var stopLookup: [String: String] = [:]
                     for item in decoded.included ?? [] where item.type == "stop" {
+                        if isZoneStopId(item.id) { continue }
                         if let name = item.attributes?.name {
                             stopLookup[item.id] = name
                         }
@@ -458,6 +458,7 @@ struct StopSelectorView: View {
                     var dirs: Set<Int> = []
                     for item in decoded.data {
                         guard let stopId = item.relationships.stop.data?.id else { continue }
+                        if isZoneStopId(stopId) { continue }
                         let seq = item.attributes.stop_sequence ?? Int.max
                         let dir = item.attributes.direction_id ?? 0
                         dirs.insert(dir)

@@ -23,15 +23,14 @@ enum MBTAScheduleService {
         let endString = iso8601.string(from: endOfDay)
 
         var components = URLComponents(string: "https://api-v3.mbta.com/schedules")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: apiKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stopId),
             URLQueryItem(name: "filter[route]", value: routeId),
             URLQueryItem(name: "filter[min_time]", value: startString),
             URLQueryItem(name: "filter[max_time]", value: endString),
             URLQueryItem(name: "include", value: "trip,stop"),
             URLQueryItem(name: "sort", value: "arrival_time")
-        ]
+        ], apiKey: apiKey)
 
         guard let url = components.url else { return [] }
         print("[MBTA] Schedules URL:", url.absoluteString)
@@ -41,6 +40,9 @@ enum MBTAScheduleService {
         request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse {
+            logRateLimitHeaders(for: http, endpoint: "/schedules")
+        }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { return [] }
 
         struct ScheduleResponse: Decodable {
@@ -119,5 +121,12 @@ enum MBTAScheduleService {
         let upcoming = rows.filter { $0.time >= now }
         print("[MBTA] upcoming rows:", upcoming.count)
         return upcoming.sorted { $0.time < $1.time }
+    }
+
+    private static func logRateLimitHeaders(for response: HTTPURLResponse, endpoint: String) {
+        let limit = response.value(forHTTPHeaderField: "x-ratelimit-limit") ?? "n/a"
+        let remaining = response.value(forHTTPHeaderField: "x-ratelimit-remaining") ?? "n/a"
+        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset") ?? "n/a"
+        print("[MBTA][RateLimit] \(endpoint) status=\(response.statusCode) limit=\(limit) remaining=\(remaining) reset=\(reset)")
     }
 }

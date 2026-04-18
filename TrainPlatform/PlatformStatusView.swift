@@ -160,18 +160,20 @@ struct PlatformStatusView: View {
     private func fetchInitialData() {
         isLoading = true
         var components = URLComponents(string: "https://api-v3.mbta.com/predictions")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stop.stopId),
             URLQueryItem(name: "filter[route]", value: stop.routeId),
             URLQueryItem(name: "include", value: "trip,route"),
             URLQueryItem(name: "sort", value: "arrival_time"),
             URLQueryItem(name: "page[limit]", value: "10")
-        ]
+        ])
         guard let url = components.url else { return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        URLSession.shared.dataTask(with: request) { data, _, error in
+        URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
+                if let http = response as? HTTPURLResponse {
+                    logRateLimitHeaders(for: http, endpoint: "/predictions")
+                }
                 guard error == nil, let data = data,
                       let decoded = try? JSONDecoder().decode(MBTAInitialResponse.self, from: data) else {
                     self.isLoading = false
@@ -257,21 +259,30 @@ struct PlatformStatusView: View {
 
     private func fetchAlerts() {
         var components = URLComponents(string: "https://api-v3.mbta.com/alerts")!
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: mbtaAPIKey),
+        components.queryItems = mbtaAPIQueryItems([
             URLQueryItem(name: "filter[stop]", value: stop.stopId),
             URLQueryItem(name: "filter[route]", value: stop.routeId),
             URLQueryItem(name: "sort", value: "-severity")
-        ]
+        ])
         guard let url = components.url else { return }
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        URLSession.shared.dataTask(with: request) { data, _, error in
+        URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
+                if let http = response as? HTTPURLResponse {
+                    logRateLimitHeaders(for: http, endpoint: "/alerts")
+                }
                 guard error == nil, let data = data,
                       let decoded = try? JSONDecoder().decode(AlertsResponse.self, from: data) else { return }
                 alertHeaders = decoded.data.compactMap { $0.attributes.header }
             }
         }.resume()
+    }
+
+    private func logRateLimitHeaders(for response: HTTPURLResponse, endpoint: String) {
+        let limit = response.value(forHTTPHeaderField: "x-ratelimit-limit") ?? "n/a"
+        let remaining = response.value(forHTTPHeaderField: "x-ratelimit-remaining") ?? "n/a"
+        let reset = response.value(forHTTPHeaderField: "x-ratelimit-reset") ?? "n/a"
+        print("[MBTA][RateLimit] \(endpoint) status=\(response.statusCode) limit=\(limit) remaining=\(remaining) reset=\(reset)")
     }
 }
 
@@ -440,4 +451,3 @@ struct RouteBadge: View {
             .clipShape(Circle())
     }
 }
-
